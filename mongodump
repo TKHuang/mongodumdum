@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+'use strict'
+
+let spawn = require('child_process').spawn,
+		p = require('commander'),
+		debug = require('debug')('mongodump');
+
+p
+  .version('0.0.1')
+  .option('-u, --user <user>', 'mongo user')
+  .option('-p, --password <password>', 'password')
+  .option('-d, --database <database>')
+  .option('-c, --collection <collection>')
+  .option('-ad, --authenticationDatabase <authenticationDatabase>', 'default is admin')
+  .option('-s, --start \/\/2012/06/01 <start>', 'which time do you want to start')
+  .option('-e, --end \/\/2012/12/31 <end>', 'which time do you want to end')
+  .option('-h, --host <host>')
+  .option('-o, --output <output>', 'choose your path to save file [default is ./dump]')
+  .parse(process.argv);
+
+let opt = [];
+
+function queryJson() {
+  return `{_id: {$gte: ObjectId("${objectIdFromDate(p.start)}"), $lt: ObjectId("${objectIdFromDate(p.end)}")}}`
+}
+
+opt.push('-u', p.user);
+opt.push('-p', p.password);
+if (p.database) opt.push('-d', p.database);
+if (p.collection) opt.push('-c', p.collection);
+opt.push('--host', p.host);
+opt.push('--out', p.output || 'dump');
+if (p.start || p.end) opt.push('--query', queryJson());
+opt.push('--authenticationDatabase', p.authenticationDatabase || 'admin');
+opt = opt.filter( item => !!item)
+
+debug('opt', opt);
+
+let dump = spawn('mongodump', opt);
+
+dump.stdout.on('data', data => {
+  console.log(data);
+});
+
+dump.stderr.on('data', data => {
+  console.log(`mongodump: ${data}`);
+})
+
+dump.on('close', code => {
+  if (code != 0) {
+    console.log('ps process exited with code ' + code);
+  }
+})
+
+function objectIdFromDate(date) {
+  if (!date) return undefined
+  return Math.floor(new Date(date).getTime() / 1000).toString(16) + "0000000000000000";
+};
+
+function dateFromObjectId(objectId) {
+  if (!objectId) return undefined
+	return new Date(parseInt(objectId.substring(0, 8), 16) * 1000);
+};
